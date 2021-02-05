@@ -1,0 +1,9 @@
+[master]
+65.0.106.53 ansible_user=ec2-user ansible_private_key=/home/ec2-user/ansible-role.pem ansible_connection=ssh
+
+[worker]
+
+65.0.203.9 ansible_user=ec2-user ansible_private_key=/home/ec2-user/ansible-role.pem ansible_connection=ssh
+
+65.0.92.0 ansible_user=ec2-user ansible_private_key=/home/ec2-user/ansible-role.pem ansible_connection=ssh
+

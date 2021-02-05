@@ -1,0 +1,60 @@
+- hosts: worker
+  tasks:
+          - name: Installing docker
+            package:
+                    name: "docker"
+                    state: present
+
+          - name: Start docker
+            service:
+                    name: "docker"
+                    state: started
+                    enabled: yes
+
+          - name: Adding yum repo for kubeadm
+            yum_repository:
+                    name: kubernetes
+                    description: Kubernetes YUM repo
+                    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+                    gpgcheck: yes
+                    enabled: yes
+                    repo_gpgcheck: yes
+                    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+                    exclude: kubelet kubeadm kubectl
+
+          - name: Installing Kubeadm
+            shell: "yum install kubeadm --disableexcludes=kubernetes -y"
+
+          - name: Enabling kubelet
+            shell: "systemctl enable kubelet --now"
+
+          - name: Pulling required images form docker hub
+            shell: "kubeadm config images pull"
+
+          - name: Change default driver cgroup to systemd
+            copy:
+                    dest: /etc/docker/daemon.json
+                    content:
+                            {
+                                    "exec-opts":["native.cgroupdriver=systemd"]
+                                    }
+          
+
+          - name: Restart docker
+            shell: "systemctl restart docker"
+
+          - name: Install iproute-tc
+            package:
+                    name: "iproute-tc"
+                    state: present
+
+          - name: Make network configuration
+            shell: "cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+"
+            shell: "sysctl --system"
+            shell: echo "1" > /proc/sys/net/bridge/bridge-nf-call-iptables        
+          - name: Joining to master
+            shell: "kubeadm join 172.31.13.160:6443 --token a7iwch.qj9fkv35fonz90uo --discovery-token-ca-cert-hash sha256:3fd5892e62361d75ee98d98e365264771fcd68268cd1e7e360cfcf5e92e1981e"

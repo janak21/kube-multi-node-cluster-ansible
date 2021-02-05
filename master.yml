@@ -1,0 +1,73 @@
+- hosts: master
+  tasks:
+          - name: Installing docker
+            package:
+                    name: "docker"
+                    state: present
+
+          - name: Start docker
+            service:
+                    name: "docker"
+                    state: started
+                    enabled: yes
+
+          - name: Adding yum repo for kubeadm
+            yum_repository:
+                    name: kubernetes
+                    description: Kubernetes YUM repo
+                    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+                    gpgcheck: yes
+                    enabled: yes
+                    repo_gpgcheck: yes
+                    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+                    exclude: kubelet kubeadm kubectl
+
+          - name: Installing Kubeadm
+            shell: "yum install kubeadm --disableexcludes=kubernetes -y"
+
+          - name: Enabling kubelet
+            shell: "systemctl enable kubelet --now"
+
+          - name: Pulling required images form docker hub
+            shell: "kubeadm config images pull"
+
+          - name: Change default driver cgroup to systemd
+            copy:
+                    dest: /etc/docker/daemon.json
+                    content:
+                            {
+                                    "exec-opts":["native.cgroupdriver=systemd"]
+                                    }
+          
+
+          - name: Restart docker
+            shell: "systemctl restart docker"
+
+          - name: Install iproute-tc
+            package:
+                    name: "iproute-tc"
+                    state: present
+
+          - name: Make network configuration
+            shell: "cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+"
+            shell: "sysctl --system"
+            shell: echo "1" > /proc/sys/net/bridge/bridge-nf-call-iptables
+         
+          - name: Set-up IP range
+            shell: "kubeadm init --pod-network-cidr=10.240.0.0/16 --ignore-preflight-errors=NumCPU --ignore-preflight-errors=Mem"
+
+          - name: Configure system as a client
+            shell: |
+                 mkdir -p $HOME/.kube
+                 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+                 sudo chown $(id -u):$(id -g) $HOME/.kube/config
+          
+          - name: Configure flannel for extra networks
+            shell: "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
+
+          - name: Generate token 
+            shell: "kubeadm token create --print-join-command"
